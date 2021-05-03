@@ -1,0 +1,478 @@
+---
+title: "Practicum 1"
+author: "Jordan Lian"
+date: "2/26/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, eval=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(ggpubr)
+library(tidyr)
+library(Metrics)
+```
+
+```{r, warning=FALSE, echo=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(ggpubr)
+library(tidyr)
+library(Metrics)
+```
+
+## Problem 1 (60 Points)
+
+### 1. (0 pts) Download the data set Taxi Fare NYC (May 2020) (source: NYC Taxi & Limousine Commission (Links to an external site.)). 
+```{r origin_taxi, taxi, warning=FALSE}
+origin_taxi <- read_csv('yellow_tripdata_2020-05.csv')
+taxi <- origin_taxi
+head(taxi)
+```
+
+### 2. (0 pts) Explore the data set to get a sense of the data and to get comfortable with it.
+```{r}
+summary(taxi)
+
+```
+
+### 3. (5 pts) Create a histogram of column 5 (trip distance) and overlay a normal curve.
+
+I plotted the initial data, but the histogram did not produce any meaningful result.
+```{r warning=FALSE}
+# Original Plot
+hist(taxi$trip_distance)
+```
+
+So I took the values where the trip distance was less than or equal to 25, and the histogram produced showed some results that resembled a histogram. Plotting a normal curve was tough, so I just overlaid the density curve.
+```{r mod_taxi, warning=FALSE}
+# Edit
+mod_taxi <- taxi[taxi$trip_distance <= 25, ]
+hist(mod_taxi$trip_distance,
+     main = "Histogram of Trip Distance",
+     xlab = "Trip Distance",
+     border = "blue",
+     col = "green",
+     freq=FALSE)
+lines(density(mod_taxi$trip_distance))
+```
+
+### 4. (3 pts) Test normality of column 5 by performing either a Shapiro-Wilk (tutorial (Links to an external site.)) or Kolmogorov-Smirnof test. Describe what you found.
+
+I generated a few visuals for the trip distance, but it didn't generate much. I also randomly sampled 5000 points for the Shapiro-Wilk test because the limit was 5,000 rows, and our dataset had 348,371 rows.
+```{r}
+mod_taxi <- taxi[sample(nrow(taxi), 5000), ]
+shapiro.test(mod_taxi$trip_distance)
+```
+
+From the results, the p-value < 0.05 which implies that the distribution of the data is significantly different from a normal distribution. In other words, we cannot assume the normality.
+
+### 5. (3 pts) Identify any outliers for the columns using a z-score deviation approach, i.e., consider any values that are more than 2 standard deviations from the mean as outliers. Which are your outliers for each column? What would you do? Summarize potential strategies in your notebook.
+
+First you have to get the z-scores such that the mean is 0 and standard deviation is 1. Then get all of the values greater than 2 or less than -2.
+
+Trip Distance
+```{r trip_distance, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (trip_distance - mean(trip_distance))/sd(trip_distance))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Fare Amount
+```{r fare_amount, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (fare_amount - mean(fare_amount))/sd(fare_amount))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Extra
+```{r extra, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (extra - mean(extra))/sd(extra))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+MTA Tax
+```{r mta_tax, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (mta_tax - mean(mta_tax))/sd(mta_tax))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Tip Amount
+```{r, tip_amount, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (tip_amount - mean(tip_amount))/sd(tip_amount))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Tolls Amount
+```{r tolls_amount, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (tolls_amount - mean(tolls_amount))/sd(tolls_amount))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Improvement Surcharge
+```{r, improvement_surcharge, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (improvement_surcharge - mean(improvement_surcharge))/sd(improvement_surcharge))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Total Amount
+```{r, total_amount, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (total_amount - mean(total_amount))/sd(total_amount))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Congestion Surcharge
+```{r congestion_surcharge, warning=FALSE}
+# Get z-scores
+mod_taxi <- taxi %>% 
+  mutate(zscore = (congestion_surcharge - mean(congestion_surcharge))/sd(congestion_surcharge))
+
+# Get values with magnitudes greater than 2
+mod_taxi <- mod_taxi[abs(mod_taxi$zscore) >= 2, ]
+head(mod_taxi$zscore)
+```
+
+Depending on what I want to do with the data, it might be best to remove the outliers in certain cases. You can also use the median instead of the mean if there  outliers significantly skew the mean and the statistic is discrete. 
+
+### 6. (2 pts) Add a new column to the data set called trip_time that is the time of the trip in minutes, calculated from the tpep_pickup_datetime and tpep_dropoff_datetime columns.
+```{r}
+taxi$trip_time <- difftime(taxi$tpep_dropoff_datetime, taxi$tpep_pickup_datetime, 
+                           units="mins")
+```
+### 7. (2 pts) Remove any negative values for the column fare_amount.
+```{r}
+taxi <- taxi[taxi$fare_amount >= 0, ]
+```
+
+### 8. (3 pts) Create a new new data set (taxi_data_full) only containing columns (in this order): tip_amount, fare_amount, trip_distance, trip_time, congestion_surcharge, payment_type.
+```{r taxi_data_full, warning=FALSE}
+taxi_data_full <- select(taxi, tip_amount, fare_amount, trip_distance, trip_time, 
+                         congestion_surcharge, payment_type)
+taxi_data_full
+```
+
+### 9. (3 pts) Standardize the scales of the numeric columns, except the first one (tip_amount), using z-score standardization. 
+```{r standard, warning=FALSE}
+standard <- taxi_data_full %>%
+  mutate_at(c(2:5), funs(c(scale(.))))
+standard
+```
+### 10. (4 pts) The data set is sorted, so creating a validation data set requires random selection of elements. Create a stratified sample where you randomly select 15% of each of the cases for each payment type to be part of the validation data set. The remaining cases will form the training data set.
+
+Firstly, I got rid of the NA values for payment_type, and I split the dataset according to the four payment types
+```{r pay_one, pay_two, pay_three, pay_four, warning=FALSE}
+# Get rid of NA values
+mod_taxi <- taxi_data_full[!is.na(taxi_data_full$payment_type), ]
+
+# Get unique values
+unique(mod_taxi$payment_type)
+
+# Split the dataset according to the unique values
+pay_one <- mod_taxi[mod_taxi$payment_type == 1, ]
+pay_two <- mod_taxi[mod_taxi$payment_type == 2, ]
+pay_three <- mod_taxi[mod_taxi$payment_type == 3, ]
+pay_four <- mod_taxi[mod_taxi$payment_type == 4, ]
+```
+
+Secondly, I used the four split up datasets and took 15% of each as the validation, and the other 85% as the training set. 
+```{r, sample_1, val_1, train_1, sample_2, val_2, train_2, sample_3, val_3, train_3, sample_4, val_4, train_4}
+# Random seed
+set.seed(123)
+
+# Payment Type = 1
+sample_1 <- sample.int(n = nrow(pay_one), size = floor(0.15*nrow(pay_one)), replace = F)
+val_1 <- pay_one[sample_1, ]
+train_1  <- pay_one[-sample_1, ]
+
+# Payment Type = 2
+sample_2 <- sample.int(n = nrow(pay_two), size = floor(0.15*nrow(pay_two)), replace = F)
+val_2 <- pay_two[sample_2, ]
+train_2 <- pay_two[-sample_2, ]
+
+# Payment Type = 3
+sample_3 <- sample.int(n = nrow(pay_three), size = floor(0.15*nrow(pay_three)), 
+                       replace = F)
+val_3 <- pay_three[sample_3, ]
+train_3 <- pay_three[-sample_3, ]
+
+# Payment Type = 4
+sample_4 <- sample.int(n = nrow(pay_four), size = floor(0.15*nrow(pay_four)), 
+                       replace = F)
+val_4 <- pay_four[sample_4, ]
+train_4 <- pay_four[-sample_4, ]
+```
+
+I then combined the validation and training datasets. 
+```{r validation, training, warning=FALSE}
+validation <- rbind(val_1, val_2, val_3, val_4)
+training <- rbind(train_1, train_2, train_3, train_4)
+
+head(validation)
+head(training)
+```
+
+### 11. (20 pts) Implement the k-NN algorithm in R (do not use an implementation of k-NN from a package) and use your algorithm with a k=5 to predict the tip amount for the following new case: 
+
+fare_amount = 17.5, trip_distance = 4.8, trip_time = 28, congestion_surcharge = 2.5, payment_type = 1
+    
+Use only the training data set. Note that you need to normalize the values of the new cases the same way as you normalized the original data. If the data set is too large to handle on your computer, then create a smaller training data set by randomly sampling the original data set.
+```{r normalize, unknown, df, mod_df, pred_values, closest, warning=FALSE}
+# Create normalization function
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x))) }
+
+# Put the new case values in a list
+unknown <- c(17.5, 4.8, 28, 2.5, 1)
+
+# Convert the trip time values to numeric type so they can be normalized
+training$trip_time <- as.numeric(training$trip_time)
+
+# Create new dataframe with the new list and training dataset, and apply the normalization function
+df <- as.data.frame(lapply(rbind(unknown, training[, 2:6]), normalize))
+
+# Create array for predicted values, initialize to 0
+pred_values <- c(0)
+
+# Count rows in training dataset
+n <- as.numeric(count(training))
+# Iterate through data frame and get all the distances and predicted values
+for(i in 2:n){
+  # Omit NA values
+  mod_df <- na.omit(df[c(1, i), ])
+  
+  # Store values in list
+  pred_values <- c(pred_values, dist(mod_df))
+}
+
+# Get the closest distances and print the top 5 (k=5)
+closest <- order(pred_values)
+training[c(closest[2:6]) - 1, 1]
+
+# Get the average of the 5 values
+sum(training[c(closest[2:6]) - 1, 1]) / 5
+```
+
+### 12. (5 pts) Apply the knn function from the class package with k=5 and redo the cases from Question (11). Compare your answers.
+```{r eval=FALSE}
+test_labels <- validation[, 1]
+train_labels <- train_class[, 1]
+
+library(class)
+prc_test_pred <- knn(train = train_class, test = validation, cl = train_labels, k=5)
+
+library(gmodels)
+CrossTable(x = test_labels, y = prc_test_pred, prop.chisq = FALSE)
+```
+
+### 13. (10 pts) Using kNN from the class package, create a plot of k (x-axis) from 2 to 8 versus accuracy (percentage of correct classifications) using ggplot.
+
+## Problem 2 (30 Points)
+
+### 1. (0 pts) Investigate this data set of home prices in King County (USA) (Links to an external site.).
+```{r origin_home, home, warning=FALSE}
+origin_home <- read_csv('kc_house_data.csv')
+home <- origin_home
+```
+
+### 2. (5 pts) Save the price column in a separate vector/dataframe called target_data. Move all of the columns except the ID, date, price, yr_renovated, zipcode, lat, long, sqft_living15, and sqft_lot15 columns into a new data frame called train_data.
+```{r target_data, train_data}
+target_data <- home$price
+train_data <- select(home, -one_of('id', 'date', 'price', 'yr_renovated', 'zipcode', 
+                                   'lat', 'long', 'sqft_living15', 'sqft_lot15'))
+```
+
+### 3. (5 pts) Normalize all of the columns (except the boolean columns waterfront and view) using min-max normalization.
+```{r}
+# create normalization function
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x))) }
+
+# Normalize data
+norm_home <- as.data.frame(lapply(train_data[-c(6:7)], normalize))
+
+# Add the untouched columns to the normalized dataset
+norm_home <- cbind(norm_home, train_data$waterfront, train_data$view)
+
+# Change column names
+norm_home <- norm_home %>% 
+  rename(waterfront = "train_data$waterfront", view = "train_data$view")
+
+# Normalized Dataset
+head(norm_home)
+```
+
+### 4. (12 pts) Build a function called knn.reg that implements a regression version of kNN that averages the prices of the k nearest neighbors using a weighted average where the weight is 3 for the closest neighbor, 2 for the second closest and 1 for the remaining neighbors (recall that a weighted average requires that you divide the sum product of the weight and values by the sum of the weights).
+
+It must use the following signature:
+
+knn.reg (new_data, target_data, train_data, k)
+
+where new_data is a data frame with new cases, target_data is a data frame with a single column of prices from (2), train_data is a data frame with the features from (2) that correspond to a price in target_data, and k is the number of nearest neighbors to consider. It must return the predicted price.
+```{r knn.reg, warning=FALSE}
+knn.reg <- function(new_data, target_data, train_data, k){
+  # Add the target column for future reference
+  train_data <- cbind(target_data, train_data)
+  
+  # Normalize the data
+  df <- as.data.frame(lapply(rbind(new_data, train_data[,2:12]), normalize))
+  
+  # Create vector to store predicted prices
+  pred_values <- c(0)
+  
+  # Get total rows for data frame
+  n <- as.numeric(count(train_data))
+  
+  # Iterate through data frame and get all the distances and predicted values
+  for(i in 2:n){
+    mod_df <- na.omit(df[c(1, i), ])
+    pred_values <- c(pred_values, dist(mod_df))
+  }
+  
+  # Get the closest distances
+  closest <- order(pred_values)
+  
+  # Get top 2 values
+  top_2 <- train_data[c(closest[2:k]) - 1, 1]
+  top_2
+  
+  # Get the average of the rest of the values
+  rest <- mean(train_data[c(closest[k:n]) - 1, 1])
+  top_3 <- c(top_2, rest)
+  top_3
+  
+  # Get the weighted average
+  weights <- c(3, 2, 1)
+  pred_price <- weighted.mean(top_3, weights)
+  return (pred_price)
+    }
+```
+
+### 5. (4 pts) Forecast the price of this new home using your regression kNN using k = 3:
+bedrooms = 3 | bathrooms = 3 | sqft_living = 4850 | sqft_lot = 11240 | floors = 3 | waterfront = 1 | view = 1 | condition = 3 | grade = 11
+sqft_above = 2270 | sqft_basement = 820 | yr_built = 1986
+
+```{r new_data, k, warning=FALSE}
+# New Data
+new_data <- c(3, 3, 4850, 11240, 3, 1, 1, 3, 11, 2270, 820, 1986)
+
+# k = 3
+k <- 3
+
+# Call function from question 4
+knn.reg(new_data, target_data, train_data, k)
+
+```
+
+### 6. (4 pts) Calculate the Mean Squared Error (MSE) using a random sample of 10% of the data set as test data.
+```{r test_data, sample, test, demand, n, prediction, eval=FALSE, warning=FALSE}
+set.seed(1234)
+test_data <- cbind(target_data, train_data)
+sample <- sample.int(n = nrow(test_data), size = floor(0.10*nrow(test_data)), replace = F)
+test <- test_data[sample, ]
+
+demand <- test$target_data
+n <- as.numeric(count(test))
+prediction <- rep(NA, n)
+for(i in 1:n){
+  new_data <- as.numeric(test[i, 2:13])
+  prediction[i] <- knn.reg(new_data, target_data, train_data, k)
+}
+
+mse(prediction, demand)
+```
+
+## Problem 3 (10 Points)
+
+### 1. (3 pts) Build a new data set with the four columns: tper, year, month, avg_price_sq_ft where tper is the time period starting at 1 (e.g., 1, 2, 3, 4, ...), year and month are the year and month of the sale of a property extracted from the column date and avg_price_sq_ft is the average price per square foot of living space for all properties sold that month. The data set should contain the sales in order from least recent to most recent, i.e., the first column after the header column should be the property sold the furthest in the past.
+```{r price_sqft, convert_year, convert_month, problem_3, warning=FALSE}
+# Create new column that combines the year and month (in that order)
+home$mon_yr <- format(as.POSIXct(origin_home$date, format="%Y/%m/%d"),"%Y-%m")
+  
+# Group average price per living square footage by month and year
+price_sqft <- home %>% 
+  group_by(mon_yr) %>%
+  summarise(avg_price = mean(price/sqft_living))
+price_sqft
+
+# Convert dates to year
+convert_year <- year(as.POSIXct(home$date, format="%Y/%m/%d"))
+convert_month <- month(as.POSIXct(home$date, format="%Y/%m/%d"))
+
+# Create new dataset
+problem_3 <- data.frame("tper" = c(1:21613),
+                        "year" = convert_year, 
+                        "month" = convert_month,
+                        "avg_price_sq_ft" = price_sqft$avg_price[match(home$mon_yr,
+                                                                price_sqft$mon_yr)])
+head(problem_3)
+```
+
+### 2. (3 pts) Plot the average sales price per month as a time series line graph.
+```{r warning=FALSE}
+# Use geom_line() and geom_point() to plot the points and connect them with group = 1
+ggplot(data = price_sqft, aes(mon_yr, avg_price, group = 1)) +
+  geom_line(color="black", size = 2) +
+  geom_point(shape=21, fill="#69b3a2", size=6, color = "#00AFBB") +
+  ggtitle("Average Sales per Month") +
+  xlab("Year-Month") + ylab("Average Sales") + 
+  theme(plot.title = element_text(face = "bold", hjust = 0.5)) +
+  scale_x_discrete(breaks = price_sqft$mon_yr[seq(1, length(price_sqft$mon_yr), by = 2)])
+```
+
+### 3. (4 pts) Forecast the average sales price for the next month is the time series using a weighted moving average of the most recent 3 months with weights of 2, 1.5, and 1.
+```{r weights, recent, warning=FALSE}
+# Store weights in a vector
+weights <- c(1, 1.5, 2)
+
+# Get the 3 most recent averages sales price
+recent <- tail(price_sqft$avg_price, 3)
+
+# Print the latest forecast for the next month
+weighted.mean(recent, weights)
+```
