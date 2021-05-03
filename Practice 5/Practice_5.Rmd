@@ -1,0 +1,199 @@
+---
+title: "Week 5"
+author: "Jordan Lian"
+date: "3/2/2021"
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+library(tidyverse)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+```
+
+## Problem 1 (20 Points)
+
+Build an R Notebook of the bank loan decision tree example in the textbook on pages 135 to 148; the CSV file is available for download below. Show each step and add appropriate documentation. Note that the provided dataset uses values *1* and *2* in default column whereas the book has *no* and *yes* in the default column. To fix any problems replace "*no*" with "*1*" and "*yes*" with "*2*" in the code that for matrix_dimensions. Alternatively, change the line below:
+```{r eval=FALSE}
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2, dimnames = matrix_dimensions)
+``` 
+
+to the following:
+```{r eval=FALSE}
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2)
+```
+
+If your tree produces poor results or runs slowly, add *control=Weka_control(R=TRUE)*. 
+
+### Step 1 - collecting data
+
+http://archive.ics.uci.edu/ml
+
+### Step 2 - exploring and preparing the data
+```{r}
+credit <- read.csv("credit.csv", stringsAsFactors = TRUE)
+str(credit)
+table(credit$checking_balance)
+table(credit$savings_balance)
+
+summary(credit$months_loan_duration)
+summary(credit$amount)
+
+table(credit$default)
+```
+
+Data preparation - creating random training and test datasets
+```{r}
+set.seed(123)
+train_sample <- sample(1000, 900)
+str(train_sample)
+
+credit_train <- credit[train_sample, ]
+credit_test  <- credit[-train_sample, ]
+
+prop.table(table(credit_train$default))
+prop.table(table(credit_test$default))
+```
+
+### Step 3 - training a model on the data
+```{r}
+library(C50)
+credit_train$default<-as.factor(credit_train$default)
+credit_model <- C5.0(credit_train[-17], credit_train$default)
+credit_model
+```
+
+### Step 4 - evaluating model performance
+```{r}
+credit_pred <- predict(credit_model, credit_test)
+
+library(gmodels)
+CrossTable(credit_test$default, credit_pred,
+           prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+           dnn = c('actual default', 'predicted default'))
+```
+
+### Step 5 - improving model performance
+
+Boosting the accuracy of decision trees
+```{r}
+credit_boost10 <- C5.0(credit_train[-17], credit_train$default,
+                         trials = 10)
+credit_boost10
+
+credit_boost_pred10 <- predict(credit_boost10, credit_test)
+CrossTable(credit_test$default, credit_boost_pred10,
+             prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+             dnn = c('actual default', 'predicted default'))
+```
+
+Making mistakes more costliers than others
+```{r warning=FALSE}
+matrix_dimensions <- list(c("no", "yes"), c("no", "yes"))
+names(matrix_dimensions) <- c("predicted", "actual")
+matrix_dimensions
+
+error_cost <- matrix(c(0, 1, 4, 0), nrow = 2)
+error_cost
+
+credit_cost <- C5.0(credit_train[-17], credit_train$default,
+                            costs = error_cost)
+credit_cost_pred <- predict(credit_cost, credit_test)
+
+CrossTable(credit_test$default, credit_cost_pred,
+             prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE,
+             dnn = c('actual default', 'predicted default'))
+```
+
+## Problem 2 (10 Points)
+Build an R Notebook of the poisonous mushrooms example using rule learners in the textbook on pages 160 to 168. Show each step and add appropriate documentation. The CSV file is available below. If you have issues with the **RWeka** package on MacOS, consider using a Windows computer, [RStudio.cloud](http://rstudio.cloud/) or skip this question.
+
+Tip: In case anyone gets this error on the 1R implementation:
+```{r eval=FALSE}
+mushroom_1R <- OneR(type ~ ., data = mushrooms)
+Error in .jcall(o, "Ljava/lang/Class;", "getClass") : 
+  weka.core.UnsupportedAttributeTypeException: weka.classifiers.rules.OneR: ...
+```
+Change your characters to factors. Here's an [explanation why factors are needed](https://stackoverflow.com/questions/38052572/weka-core-unsupportedattributetypeexception-weka-classifiers-trees-j48-c45prune). 
+
+### Step 1 - collecting data
+
+http://archive.ics.uci.edu/ml
+
+### Step 2 - exploring and preparing the data
+```{r}
+mushrooms <- read.csv("mushrooms.csv", stringsAsFactors = TRUE)
+mushrooms$veil_type <- NULL
+table(mushrooms$type)
+```
+
+```{r}
+```
+
+### Step 3 - training a model on the data
+```{r}
+library(RWeka)
+mushroom_1R <- OneR(type ~ ., data = mushrooms)
+mushroom_1R
+```
+
+### Step 4 - evaluating model performance
+```{r}
+summary(mushroom_1R)
+```
+
+### Step 5 - improving model performance
+```{r}
+mushroom_JRip <- JRip(type ~ ., data = mushrooms)
+mushroom_JRip
+```
+
+## Problem 3 (35 Points)
+So far we have explored four different approaches to classification: kNN, Naive Bayes, C5.0 Decision Trees, and RIPPER Rules. Comment on the differences of the algorithms and when each is generally used. Provide examples of when they work well and when they do not work well. Add your comments to your R Notebook. Be specific and explicit; however, no code examples are needed.
+
+### kNN
+
+k-nearest neighbors is a non-parametric classification that predicts the output based on the k closest training inputs in the data set. The algorithm uses distance for classifcation, so normalizing the training data will significantly improve its accuracy. Usually the distance is measured as a Euclidean distance, although there are other types like Manhattan, Hamming, etc. kNN is pretty unbiased, and the algorithm itself is simple. However, for data sets with higher dimensions, kNN is not good due to time and space complexity. kNN can be used for recommendation systems, outlier detection systems, and documents finders for semantic similarity.
+
+### Naive Bayes
+
+Naive Bayes applies conditional probability to determine predicted values given their input. Spam filter emails are built off Naive Bayes, and they work surprisingly well in certain cases. Unlike kNN, Naive Bayes works well with high-dimensional data because it's easy to parallelize and it handles big data well. However, due to its Naivety (pun intended), other algorithms tend to outperform Naive Bayes. 
+
+### C5.0 Decision Trees
+
+Decision trees are simple and they are easy to understand and implement. Decision trees merely divide up the data into different levels to predict the output based on the inputs. However, they suffer from high variance, which means the smallest changes in the training data can screw up the entire decision tree. The C5.0 decision trees are the industry standard algorithm for producing decision trees, as they pretty well in comparison to the more advanced methods. It estimates the error rate of every internal node, and replaces it with a leaf node if the estimated error of the leaf is lower. C5.0 is the latest version, so there will most likely will be a new version soon.
+
+### RIPPER Rules
+
+RIPPER rules, also known as "Repeated Incremental Pruning to Produce Error Reduction,"is a rule-based classification algorithm, where it gets a set of rules from the training data set itself, thus it is considered an induction algorithm. RIPPER works well with imbalanced class distributions. Imbalanced class distributions are present when most of the records in a data set belong to a particular class while the rest belong to different classes. RIPPER also works well with noisy data sets (corrupted data) because it uses a validation data set to prevent model over-fitting.
+
+## Problem 4 (35 Points)
+Much of our focus so far has been on building a single model that is most accurate. In practice, data scientists often construct multiple models and then combine them into a single prediction model. This is referred to as a model ensemble. Two common techniques for assembling such models are boosting and bagging. Do some research and define what model ensembles are, why they are important, and how boosting and bagging function in the construction of assemble models. Be detailed and provide references to your research. You can use this [excerpt](https://da5030.weebly.com/uploads/8/6/5/9/8659576/baggingboostingkelleher.pdf) from [Kelleher, MacNamee, and D'Arcy, Fundamentals of Machine Learning for Predictive Data Analytics](https://mitpress.mit.edu/books/fundamentals-machine-learning-predictive-data-analytics) as a starting point. This book is an excellent resource for those who want to dig deeper into data mining and machine learning.
+
+Model ensembles are prediction models composed of a set of models. The idea is to have multiple people working on the same model independently to guard against group think. Ensembles have two defining properties:
+
+1. Ensembles induce each model using a modified version of the data set to build multiple and different models from the same data set.
+2. Ensembles aggregate the predictions of the different models to make a final prediction. They use different voting mechanisms for categorical features, and they use central tendencies (mean/median) for continuous target features. 
+
+In addition to having two properties, ensembles have two standard methods of creation: boosting and bagging.
+
+1. For **boosting**, each new model added is biased to pay more attention to the instances that the previous models misclassified. Boosting uses a weighted data set that can incrementally adapt the data set used to train the models. The weights are initially assigned as $\frac{1}{n}$, where *n* is the number of instances in the data set. These weights distribute across the data set to create a new replicated and proportionally weighted dataset.
+
+2. **Bagging** (bootstrap aggregating) is where each model in the ensemble is based on a random sample of the data set where sampling replacement is used and the random sample is the exact same size as the data set. Sampling with replacement is used because there will be duplicates and some missing values, which will make each bootstrap sample different. Bagging works well with decision tree induction algorithms because decision trees are highly sensitive to changes in the data set as I mentioned above. When bagging is used with decision trees, subspace sampling is quite frequent. Subspace sampling is where the sampling process is extended so each sample is only sampled from a randomly selected subset of the data set's descriptive features. The combination of bagging, subspace sampling, and decision trees is known as a **random forest model**. When the individual models are induced, the predictions are determined by a vote or the median (the median is less affected by outliers than the mean).
+
+Overall, bagging is simpler than boosting, although they each have their different uses. For data sets with up to 4,000 descriptive features, boosted decision tree ensembles outperformed the bagging random forest ensembles. However, for anything with more than 4,000 features, random forest ensembles (bagging) performed better. Boosted ensembles are prone to over-fitting, so it becomes more of a problem when there are more features in a data set.
+
+Model ensembles technically don't have to consist of decision trees, they can have any type of prediction model. However, decision trees are sensitive to changes in the data sets (induction sensitivity). The most important thing is that ensembles consist of an entire set of different models built independently from the other models. That way you can get the best of all of the models and combine them together.
+
+## Resources
+<p> \textcolor{blue}{https://da5030.weebly.com/rweka-hints.html} </p>
+<p> \textcolor{blue}{https://rstudio.cloud/} </p>
