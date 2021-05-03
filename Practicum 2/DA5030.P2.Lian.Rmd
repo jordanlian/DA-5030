@@ -1,0 +1,414 @@
+---
+title: "Practicum 2"
+author: "Jordan Lian"
+date: "3/23/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+library(tidyverse)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+```
+
+## Problem 1 (50 pts)
+1. (0 pts) Download the data set Census Income Data for Adults along with its explanation. There are two data sets (adult.data and adult.test). Note that the data file does not contain header names; you may wish to add those. The description of each column can be found in the data set explanation. Combine the two data sets into a single data set.
+```{r}
+# Load two datasets
+adult.data <- read.table("adult.data", header=FALSE, sep= ",")
+adult.test <- read.table("adult.test", header=FALSE, sep=",", skip=1)
+
+# Combine data frames
+origin_adult <- rbind(adult.data, adult.test)
+
+# Rename columns
+colnames(origin_adult) <- c("age", "workclass", "fnlwgt", "education", "education-num", 
+                            "marital-status", "occupation", "relationship", "race", "sex", 
+                            "capital-gain", "capital-loss", "hours-per-week", "native_country", 
+                            "income")
+# Print data frame
+head(origin_adult)
+```
+
+2. (0 pts) Explore the combined data set as you see fit and that allows you to get a sense of the data and get comfortable with it. 
+```{r}
+# Keep original dataset
+adult <- origin_adult
+
+# Check for unique income values
+unique(adult$income)
+
+# Get rid of the space and periods
+adult$income <- gsub("[.]", "", adult$income)
+adult$income <- gsub("[ ]", "", adult$income)
+
+# Check unique values
+unique(adult$income)
+
+# Make age a categorical value for Naive Bayes classifier
+a <- (max(adult$age) - min(adult$age)) / 3
+adult <- adult %>% 
+  mutate(age_bins = cut(adult$age, breaks = c(min(adult$age), min(adult$age) + a, max(adult$age) - a, max(adult$age))))
+head(adult)
+```
+
+3. (3 pts) Split the combined data set 75/25% so you retain 25% for validation and tuning using random sampling with replacement. Use a fixed seed so you produce the same results each time you run the code. Going forward you will use the 75% data set for training and the 25% data set for validation and to determine accuracy.
+
+I could not use random sampling with replacement or else the validation dataset would have 50% of the values rather than 25%.
+```{r}
+# Random seed
+set.seed(123)
+
+# Sample dataset
+sample <- sample.int(n = nrow(adult), size = floor(0.75*nrow(adult)), replace = F)
+origin_training <- adult[sample, ]
+origin_validation <- adult[-sample, ]
+
+training <- origin_training
+validation <- origin_validation
+```
+
+4. (10 pts) Using the Naive Bayes Classification algorithm from the KlaR package, build a binary classifier that predicts whether an individual earns more than or less than US \$49,764  (median salary of US workers in first 3 months of 2020) . Only use the features age, education, workclass, sex, race, and native-country. Ignore any other features in your model. You need to transform continuous variables into categorical variables by binning (use equal size bins from min to max). (Note: you can use <=50K column as an approximation of $49,764 in the dataset.)
+```{r}
+library(klaR)
+
+# Naive Bayes
+library(naivebayes)
+nbmodel <- naive_bayes(income~age_bins+education+workclass+sex+race+native_country, data=training, laplace = 1)
+nbmodel
+
+# check the accuracy
+prediction <- predict(nbmodel, validation)
+table(prediction, validation$income)
+```
+
+5. (5 pts) Build a confusion matrix for the classifier from (4) and comment on it, e.g., explain what it means.
+```{r}
+library(caret)
+confusionMatrix(prediction, as.factor(validation$income))
+```
+
+6. (12 pts) Create a full logistic regression model of the same features as in (4) (i.e., do not eliminate any features regardless of p-value). Be sure to either use dummy coding for categorical features or convert them to factor variables and ensure that the glm function does the dummy coding.
+```{r}
+# Make income a factor
+training$income <- as.factor(training$income)
+
+# Regression Model
+log_reg <- glm(income~age_bins+education+workclass+sex+race+native_country, data=training, family=binomial(link="logit"))
+log_reg
+
+# Predict using regression model
+validation$income <- as.factor(validation$income)
+pdata <- predict(log_reg, newdata = validation, type = "response")
+```
+
+7. (5 pts) Build a confusion matrix for the classifier from (5) and comment on it, e.g., explain what it means.
+
+Due to the dataset, I couldn't use the confusionmatrix() function. Instead, I gathered the prediction data, and stored it in the validation dataset, and got the accuracy from there.
+```{r}
+# Store prediction data in a new column
+validation$reg_predictions <- pdata
+
+# Factor by less than or greater than or equal to 0.5
+validation$reg_prediction_code <- ifelse(validation$reg_predictions >= 0.5, ">50K", "<=50K")
+summary(validation$reg_predictions)
+
+# Accuracy 
+count(validation[validation$income == validation$reg_prediction_code, ]) / count(validation)
+```
+
+8. (10 pts) Build a function called predictEarningsClass() that predicts whether an individual makes more or less than US $49,764 and that combines the two predictive models from (4) and (6) into a simple ensemble. If the two models disagree on a prediction, then the prediction should be the one from the model with the higher accuracy -- make sure you do not hard code that as the training data may change over time and the same model may not be the more accurate forever.
+```{r}
+predictEarningsClass <- function(pred_vector) {
+  pred_validation <- origin_validation
+  pred_validation <- rbind(pred_validation, pred_vector)
+
+  # Naive Bayes
+  Bayes_prediction <- predict(nbmodel, pred_validation)
+  pred_1 <- tail(Bayes_prediction, n = 1)
+    
+  # Logistic Regression
+  Log_prediction <- predict(log_reg, newdata = pred_validation, type = "response")
+  
+  # Create return variable
+  pred_income <- pred_1
+  
+  # Convert to factors
+  if (tail(Log_prediction, n = 1) < 0.5) {
+    pred_2 <- "<=50K"
+  } else {
+    pred_2 <- ">50K"
+  }
+  
+  # If predictions aren't equal, use regression model prediction (higher accuracy)
+  if (pred_1 != pred_2) {
+    pred_income <- pred_2
+  }
+
+  return(pred_income)
+}
+```
+
+9. (5 pts) Using the ensemble model from (8), predict whether a 47-year-old female adult who is a local government worker with a a Bachelor's degree who immigrated from Honduras earns more or less than US $49,764 
+```{r}
+# Prediction vector
+pred_vector <- c(47, " Local-gov", NA, " Bachelors", NA, NA, NA, NA, " Other", " Female", NA, NA, NA, " Honduras", NA, "(41.3,65.7]")
+
+# Call function
+predictEarningsClass(pred_vector)
+```
+
+## Problem 2 (50 pts)
+1. (0 pts) Load this data set on used car sales into a dataframe called cars.df and then explore the data. Exclude the following columns/fields from the data -- do not use in any of the modeling going forward: ID, zipcode, Trim, Engine, Model, BodyType. Remove any rows where there is a missing value for NumCylinders or the value is 0. Same for DriveType. Convert DriveType to a set of one-hot dummy code encoding.
+```{r}
+# Load dataset
+origin_cars <- read_csv('used_car_sales_ebay.csv')
+cars.df <- origin_cars
+
+# Exclude the following columns
+cars.df = subset(cars.df, select = -c(ID, zipcode, Trim, Engine, Model, BodyType))
+
+# Remove NA values for NumCylinders and DriveType
+cars.df <- cars.df[!is.na(cars.df$NumCylinders), ]
+cars.df <- cars.df[!is.na(cars.df$DriveType), ]
+
+# Remove 0 values for NumCylinders and DriveType
+cars.df <- cars.df[cars.df$NumCylinders != 0, ]
+cars.df <- cars.df[cars.df$DriveType != 0, ]
+
+head(cars.df)
+
+# Convert DriveType to one-hot dummy code
+library(fastDummies)
+#cars.df <- fastDummies::dummy_cols(cars.df, select_columns = "DriveType")
+#knitr::kable(cars.df)
+# this took too much time to load the code
+```
+
+2. (3 pts) Are there outliers in any one of the features in the data set? How do you identify outliers? Remove rows that contain outliers for the column pricesold (more than 3 standard deviations from the mean). Create a second data set with outliers removed called cars.no.df. Keep the original data set cars.df.
+```{r}
+cars.no.df <- cars.df[abs(cars.df$pricesold - mean(cars.df$pricesold)) <= 3*sd(cars.df$pricesold), ]
+cars.no.df
+```
+
+3. (4 pts) Using pairs.panel, what are the distributions of each of the numeric features in the data set with outliers removed (cars.no.df)? Are they reasonably normal so you can apply a statistical learner such as regression? Can you normalize features through a log, inverse, or square-root transform? State which features should be transformed and then transform as needed and build a new data set, cars.tx.
+```{r}
+library(psych)
+pairs.panels(cars.no.df[, c(1, 3, 6)])
+```
+
+### Normalize Mileage and Cylinders
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x))) }
+cars.tx <- as.data.frame(lapply(cars.no.df[c(3, 6)], normalize))
+cars.tx <- cbind(cars.no.df[c(1:2, 4:5, 7)], cars.tx)
+head(cars.tx)
+```
+4. (3 pts) What are the correlations to the response variable (Mileage) for cars.no.df? Are there collinearities? Build a full correlation matrix.
+```{r}
+cor(cars.no.df[c(1, 3, 6)], method = c("pearson", "kendall", "spearman"))
+```
+
+5. (5 pts) Split the each of the three data sets, cars.no.df, cars.df, and cars.tx 70%/30% so you retain 30% for testing using random sampling without replacement. Call the data sets, cars.training and cars.testing, cars.no.training and cars.no.testing, and cars.tx.training and cars.tx.testing.
+
+### Split cars.df
+```{r}
+# Random seed
+set.seed(1234)
+
+# Sample dataset
+sample <- sample.int(n = nrow(cars.df), size = floor(0.70*nrow(cars.df)), replace = F)
+cars.training <- cars.df[sample, ]
+cars.testing <- cars.df[-sample, ]
+```
+
+### Split cars.no.df
+```{r}
+# Random seed
+set.seed(1234)
+
+# Sample dataset
+sample <- sample.int(n = nrow(cars.no.df), size = floor(0.70*nrow(cars.no.df)), replace = F)
+cars.no.training <- cars.no.df[sample, ]
+cars.no.testing <- cars.no.df[-sample, ]
+```
+
+### Split cars.tx
+```{r}
+# Random seed
+set.seed(1234)
+
+# Sample dataset
+sample <- sample.int(n = nrow(cars.tx), size = floor(0.70*nrow(cars.tx)), replace = F)
+cars.tx.training <- cars.tx[sample, ]
+cars.tx.testing <- cars.tx[-sample, ]
+```
+
+6. (5 pts) Build three full multiple regression models for predicting Mileage: one with cars.training, one with cars.no.training, and one with cars.tx.training, i.e., regression models that contains all features regardless of their p-values. Call the models reg.full, reg.no, and reg.tx.
+
+### cars.training
+```{r}
+reg.full <- glm(Mileage ~., data = cars.training, family=gaussian)
+```
+
+### cars.no.training
+```{r}
+reg.no <- glm(Mileage ~., data = cars.no.training, family=gaussian)
+```
+
+### cars.tx.training
+```{r}
+reg.tx <- glm(Mileage ~., data = cars.tx.training, family=gaussian)
+```
+
+7. (13 pts) Build three ideal multiple regression models for cars.training, cars.no.training, and cars.tx.training using backward elimination based on p-value for predicting km_driven.
+
+### cars.training
+```{r warning=FALSE}
+library(MASS)
+ideal_cars <- glm(Mileage ~., data = cars.training, family=gaussian)
+step_1 <- stepAIC(ideal_cars, direction = "backward", trace = FALSE)
+summary(step_1)
+```
+
+### cars.no.training
+```{r}
+library(MASS)
+no_cars <- glm(Mileage ~., data = cars.no.training, family=gaussian)
+step_2 <- stepAIC(no_cars, direction = "backward", trace = FALSE)
+summary(step_2)
+```
+
+### cars.tx.training
+```{r}
+library(MASS)
+tx_cars <- glm(Mileage ~., data = cars.tx.training, family=gaussian)
+step_3 <- stepAIC(tx_cars, direction = "backward", trace = FALSE)
+summary(step_3)
+```
+
+8. (12 pts) Provide an analysis of the six models (using their respective testing data sets), including Adjusted R-Squared and RMSE. Which of these models is the best? Why?
+
+I could not run tests on the models because of the new levels for DriveType and Make.
+
+### Full regression models
+1. reg.full
+```{r eval=FALSE}
+reg.full_pred <- predict(reg.full, newdata = cars.testing, type = "response")
+
+# Store prediction data in a new column
+cars.testing$reg.full_pred <- reg.full_pred
+
+# Accuracy 
+count(cars.testing[cars.testing$Mileage == cars.testing$reg.full_pred, ]) / count(cars.testing)
+
+# RMSE
+RMSE(cars.testing$reg.full_pred, as.integer(cars.testing$Mileage))
+
+# R-squared
+R2(cars.testing$reg.full_pred, as.integer(cars.testing$Mileage))
+```
+
+2. reg.no
+```{r eval=FALSE}
+reg.no_pred <- predict(reg.no, newdata = cars.no.testing, type = "response")
+
+# Store prediction data in a new column
+cars.no.testing$reg.no_pred <- reg.no_pred
+
+# Accuracy 
+count(cars.no.testing[cars.no.testing$Mileage == cars.no.testing$reg.no_pred, ]) / count(cars.no.testing)
+
+# RMSE
+RMSE(cars.no.testing$reg.no_pred, as.integer(cars.no.testing$Mileage))
+
+# R-squared
+R2(cars.no.testing$reg.no_pred, as.integer(cars.no.testing$Mileage))
+```
+
+3. reg.tx
+```{r eval=FALSE}
+# Prediction
+reg.tx_pred <- predict(reg.tx, newdata = cars.tx.testing, type = "response")
+
+# Store prediction data in a new column
+cars.tx.testing$reg.tx_pred <- reg.tx_pred
+
+# Accuracy 
+count(cars.tx.testing[cars.tx.testing$Mileage == cars.tx.testing$reg.tx_pred, ]) / count(cars.tx.testing)
+
+# RMSE
+RMSE(cars.tx.testing$reg.tx_pred, as.integer(cars.tx.testing$Mileage))
+
+# R-squared
+R2(cars.tx.testing$reg.tx_pred, as.integer(cars.tx.testing$Mileage))
+```
+
+### Backward Elimination
+
+1. cars.training
+```{r eval=FALSE}
+# Prediction
+step_1_pred <- predict(step_1, newdata = cars.testing, type = "response")
+
+# Store prediction data in a new column
+cars.testing$step_1_pred <- step_1_pred
+
+# Accuracy 
+count(cars.testing[cars.testing$Mileage == cars.testing$step_1_pred, ]) / count(cars.testing)
+
+# RMSE
+RMSE(cars.testing$step_1_pred, as.integer(cars.testing$Mileage))
+
+# R-squared
+R2(cars.testing$step_1_pred, as.integer(cars.testing$Mileage))
+```
+
+2. cars.no.training
+```{r eval=FALSE}
+# Prediction
+step_2_pred <- predict(step_2, newdata = cars.no.testing, type = "response")
+
+# Store prediction data in a new column
+cars.no.testing$reg.no_pred <- step_2_pred
+
+# Accuracy 
+# count(cars.no.testing[cars.no.testing$Mileage == cars.no.testing$step_2_pred, ]) / count(cars.no.testing)
+
+# RMSE
+RMSE(cars.no.testing$step_2_pred, as.integer(cars.no.testing$Mileage))
+
+# R-squared
+R2(cars.no.testing$step_2_pred, as.integer(cars.no.testing$Mileage))
+```
+
+3. cars.tx.training
+```{r eval=FALSE}
+# Prediction
+step_3_pred <- predict(step_3, newdata = cars.tx.testing, type = "response")
+
+# Store prediction data in a new column
+cars.tx.testing$step_3_pred <- step_3_pred
+
+# Accuracy 
+count(cars.tx.testing[cars.tx.testing$Mileage == cars.tx.testing$step_3_pred, ]) / count(cars.tx.testing)
+
+# RMSE
+RMSE(cars.tx.testing$step_3_pred, as.integer(cars.tx.testing$Mileage))
+
+# R-squared
+R2(cars.tx.testing$step_3_pred, as.integer(cars.tx.testing$Mileage))
+```
+
+9. (5 pts) Using each of the regression models, what are the predicted odometer readings (Mileage) of a 1999 6-cylinder Chevrolet Blazer with 4WD that sold in 2018 for US$8,450? Why are the predictions different?
+
+I could not run tests on the models because of the new levels for DriveType and Make.
