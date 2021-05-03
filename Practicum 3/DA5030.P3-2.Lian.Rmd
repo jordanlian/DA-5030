@@ -1,0 +1,110 @@
+---
+title: "Practicum 3"
+author: "Jordan Lian"
+date: "4/20/2021"
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Problem 2 (40 pts)
+1. (0 pts) Download this data set on Whole Sale Customers (https://archive.ics.uci.edu/ml/datasets/Wholesale+customers).
+
+### Attribute Information:
+
+1) FRESH: annual spending (m.u.) on fresh products (Continuous);
+2) MILK: annual spending (m.u.) on milk products (Continuous);
+3) GROCERY: annual spending (m.u.)on grocery products (Continuous);
+4) FROZEN: annual spending (m.u.)on frozen products (Continuous)
+5) DETERGENTS_PAPER: annual spending (m.u.) on detergents and paper products (Continuous)
+6) DELICATESSEN: annual spending (m.u.) on and delicatessen products (Continuous);
+7) CHANNEL: customers Channel - Horeca (Hotel/Restaurant/Cafe) or Retail channel (Nominal)
+8) REGION: customers Region - Lisbon, Oporto or Other (Nominal)
+
+### Descriptive Statistics:
+1. (Minimum, Maximum, Mean, Std. Deviation)
+- FRESH (3, 112151, 12000.30, 12647.329)
+- MILK (55, 73498, 5796.27, 7380.377)
+- GROCERY (3, 92780, 7951.28, 9503.163)
+- FROZEN (25, 60869, 3071.93, 4854.673)
+- DETERGENTS_PAPER (3, 40827, 2881.49, 4767.854)
+- DELICATESSEN (3, 47943, 1524.87, 2820.106)
+
+2. REGION Frequency
+- Lisbon 77
+- Oporto 47
+- Other Region 316
+- Total 440
+
+3. CHANNEL Frequency
+- Horeca 298
+- Retail 142
+- Total 440
+
+```{r Download dataset}
+origin_customers <- read.csv('Wholesale customers data.csv')
+customers <- origin_customers
+# customers <- scale(origin_customers)
+head(customers)
+```
+
+2. (0 pts) Build a new R Notebook named DA5030.P3-2.LastName.Rmd, where LastName is your last name.
+3. (40 pts) Using an implementation of your choice of the k-means algorithm, determine clusters that may exist. Define 2, 3, and 4 clusters. What are some of the characteristics of the determined clusters? How would you label them?
+
+I used a few different methods using fviz_nbclust() and NbClust() to determine the optimal amount of clusters.
+
+### Libraries
+```{r Libraries}
+library(factoextra)
+library(NbClust)
+```
+### fviz_nbclust()
+The Elbow and Silhouette methods had similar conclusions, while the Gap statistic method suggested to use 10 clusters. However, this was an outlier compared to the other values (2 and 4 respectively).
+```{r Methods}
+# Elbow method
+fviz_nbclust(customers, kmeans, method = "wss") +
+    geom_vline(xintercept = 4, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+# Silhouette method
+fviz_nbclust(customers, kmeans, method = "silhouette")+
+  labs(subtitle = "Silhouette method")
+
+# Gap statistic
+set.seed(123)
+fviz_nbclust(customers, kmeans, nstart = 25,  method = "gap_stat", nboot = 50)+
+  labs(subtitle = "Gap statistic method")
+```
+### NbClust()
+```{r Methods 2.0}
+clusters <- NbClust(data = customers, diss = NULL, distance = "euclidean", 
+                    method = "kmeans")
+clusters$Best.partition
+```
+Based off of the 4 functions, I decided to go with 3 clusters and define/characterize them. I used kmeans to define the parameters for the clusters. I initially tried out using 2 clusters, but one of the clusters seemed too big.
+```{r Define}
+# run K-Means
+km <- kmeans(customers, 3, 15)
+
+# print components of km
+print(km)
+
+# plot clusters
+plot(customers, col = km$cluster)
+
+# plot centers
+points(km$centers)
+```
+I plotted the clusters to get a better visual understanding of the clusters themselves.
+```{r Plot}
+fviz_cluster(km, data = customers,
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw()
+             )
+```
