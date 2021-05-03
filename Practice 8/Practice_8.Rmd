@@ -1,0 +1,119 @@
+---
+title: "Practice Problems 8"
+author: "Jordan Lian"
+date: "4/04/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r eval=FALSE}
+library(tidyverse)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+```
+
+## Problem 1 (60 Points)
+Build an R Notebook of the social networking service example in the textbook on pages 296 to 310. Show each step and add appropriate documentation.
+
+### Step 1 - collecting data
+For this analysis, I used a dataset representing a random sample of 30,000 U.S. high school students who had profiles on a well-known SNS in 2006. When the data was collected, the SNS was a popular web destination for US teenagers. Therefore, it is reasonable to assume that the profiles represent a fairly wide cross section of American adolescents in 2006.
+
+### Step 2 - exploring and preparing the data
+```{r Step 2 pre-processing}
+# Load dataset, and explore
+teens <- read.csv("snsdata.csv")
+table(teens$gender)
+table(teens$gender, useNA = "ifany")
+summary(teens$age)
+
+# Change data to work with ages 13-20 only
+teens$age <- ifelse(teens$age >= 13 & teens$age < 20, teens$age, NA)
+summary(teens$age)
+```
+
+1. Data preparation - dummy coding missing values
+```{r Step 2 dummy code}
+# Dummy code gender values
+teens$female <- ifelse(teens$gender == "F" & !is.na(teens$gender), 1, 0)
+teens$no_gender <- ifelse(is.na(teens$gender), 1, 0)
+
+# Get tables
+table(teens$gender, useNA = "ifany")
+table(teens$female, useNA = "ifany")
+table(teens$no_gender, useNA = "ifany")
+```
+
+2. Data preparation - imputing the missing values
+```{r Step 2 imputing values}
+# Get the mean age, and get a table
+mean(teens$age, na.rm = TRUE)
+aggregate(data = teens, age ~ gradyear, mean, na.rm = TRUE)
+
+# Impute values with ifelse statement
+ave_age <- ave(teens$age, teens$gradyear, FUN = function(x) mean(x, na.rm = TRUE))
+teens$age <- ifelse(is.na(teens$age), ave_age, teens$age)
+summary(teens$age)
+```
+
+### Step 3 - training a model on the data
+```{r Step 3}
+# Scale the data
+interests <- teens[5:40]
+interests_z <- as.data.frame(lapply(interests, scale))
+
+# Get random sample
+set.seed(2345)
+teen_clusters <- kmeans(interests_z, 5)
+```
+
+### Step 4 - evaluating model performance
+```{r Step 4}
+# Get size and centers
+teen_clusters$size
+teen_clusters$centers
+```
+
+### Step 5 - improving model performance
+```{r Step 5}
+teens$cluster <- teen_clusters$cluster
+teens[1:5, c("cluster", "gender", "age", "friends")]
+
+# Aggregate data
+aggregate(data = teens, age ~ cluster, mean)
+aggregate(data = teens, female ~ cluster, mean)
+aggregate(data = teens, friends ~ cluster, mean)
+```
+
+## Problem 2 (40 Points)
+Provide 100-300 word answers to each of the following interview questions:
+
+1. (10 Points) What are some of the key differences between SVM and Random Forest for classification? When is each algorithm appropriate and preferable? Provide examples.
+
+Random Forest is suited for multi-class problems, while SVM is suited for two-class problems. If you were to solve a multi-class problem with SVM, you would have to reduce it to multiple binary classification problems.
+
+Random Forest works well with a mix of numerical and categorical features. SVM maximizes the "margin" and thus relies on the concept of "distance" between different points. You can decide is the distance is meaningful. As a result, one-hot encoding for categorical features is necessary. Additionally, min-max or other scaling methods is highly recommended during data pre-processing.
+
+If you have data with n points and m features, you need to construct an $n \times n$ matrix by calculating $n^2$ dot products (computational complexity) for SVM. Therefore, as a rule of thumb, SVM is not really scalable beyond $10^5$ points. A large number of features (homogeneous features with meaningful distance, is generally not a problem. A good example would be a pixel with an image.
+
+For a classification problem, Random Forest gives you probability of belonging to class. SVM gives you distance to the boundary, you still need to convert it to probability somehow if you need probability. Regardless, SVM generally performs better than Random Forest. SVM gives you "support vectors", which are points in each class closest to the boundary between classes. Those vectors can be interpreted in different ways.
+
+2. (10 Points) Why might it be preferable to include fewer predictors over many?
+
+When you add irrelevant features, it increases the model's tendency to over-fit because those features introduce more noise, while adding nothing to the model besides complication. When two variables are correlated, they might be harder to interpret when using regression. Dimensionality can also be a curse as well as a blessing. Additionally, it takes more time to include more variables in your model and to get that data. As a result, is a computational and a labor cost that is incurred with adding more predictors. When thinking of these types of problems, it is always to start and think simple so others can understand your work.
+
+3. (10 Points) You are asked to provide R-Squared for a kNN regression model. How would you respond to that request?
+
+$R^2$ is a cursory measure of goodness of fit of a linear model to the data and it is used in regression analysis. It is popular when deciding between linear and non-linear regression models. kNN for classification has different evaluation metrics than regression. You can look at 'accuracy', 'true-positive', 'false-positive', etc (TP, FP, TN, FN), 'precision', 'recall', 'F1 score', etc. for evaluating the performance of a kNN regression model. Essentially, $R^2$ is not a good metric for kNN, and there are other models where $R^2$ is useful. Instead, you can look at accuracy, ROC, mean Average Precision, or F1-score. These metrics are all different, although accuracy is a good metric to start with.
+
+4. (10 Points) How can you determine which features to include when building a multiple regression model?
+
+You should not rely on the (in)significance of the coefficients. You should first pick the criterion that describes your prediction needs best (e.g. misclassification rate, AUC of ROC, some form of these with weights,...)
+
+For each model of interest, evaluate this criterion. This can be done with a validation set through cross validation (typically tenfold), or whatever other options your criterion of interest allows. You also should probably pick the most parsimonious model (least variables) within one standard error of the best value. If you have time to do some extensive data processing, you can try out different features, and see which combination produces the highest accuracy values. However, this is usually unfeasible because it takes too much time and effort. So to decide which features you should incorporate, then you should use forward/backward modeling or penalized/Lasso regression. For R, the glmnet package does the job for this kind of work.
