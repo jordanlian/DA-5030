@@ -1,0 +1,195 @@
+---
+title: "Practice Problems 6"
+author: "Jordan Lian"
+date: "3/14/2021"
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For all of the problems below, keep in mind that feature selection is one of the most difficult issues in model building, particularly regression. We have introduced several automatic feature selection approaches: forward and backward fitting using either *p*-value, Adjusted *R*-Squared, or *AIC*. In addition we also have Principal Component Analysis (*PCA*). However, in practice you may also need to choose from derived or combined features, *e.g.*, ratios or sums. This makes feature selection a combinatorially problem. In practice, you need to use domain expertise to choose features that you suspect or know contribute to the response variable. So, in this problem, use your domain knowledge and intuition.
+
+R implements backward and forward fitting using *AIC* with the *step()* function. You may use it for the problems if you wish. Note that *AIC* will likely produce a model that includes coefficients with a *p*-value > 0.05. That is because *AIC*-based selection is based on adding or eliminating features that reduce the information in the model -- it is not based on statistical significance. Also note that elimination is a greedy algorithm and will not produce an optimal model. Like finding an optimal decision tree, finding an optimal set of features is an *NP*-Complete problem and thus is computationally intractable requiring suboptimal solutions that can be identified in polynomial time.
+
+In addition, just because a model A has a higher Adjusted *R*-Squared or a lower *AIC* compared to model B doesn't mean that it is better. Model A may have a lower mean squared error (smaller mean residuals) but that difference in mean error could be due to sampling. Thus, data scientists confirm that model A is really better than model B by running a one-way *ANOVA* or a *t*-test that compares mean residuals. In R you can simply use *a <- anova(modelA, modelB)* followed by *summary(a)* to determine if the difference in the model performance is statistically significant.
+
+Compare your answer with those of your peers using the discussion forum.
+
+## Problem 1 (60 Points)
+Download the [data set on student achievement](https://archive.ics.uci.edu/ml/datasets/Student+Performance) in secondary education math education of two Portuguese schools (use the data set *Students Math*). Using any packages you wish, complete the following tasks:
+```{r eval=FALSE}
+library(tidyverse)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+```
+
+```{r dataset, warning=FALSE}
+origin_math <- read_csv('student-mat.csv')
+math <- origin_math
+head(math)
+```
+
+1. (10 pts) Create scatter plots and pairwise correlations between *age*, *absences*, *G1*, and *G2* and final grade (G3) using the *pairs.panels()* function in R.
+```{r}
+library(psych)
+pairs.panels(math[,c(3, 30:33)])
+```
+
+2. (10 pts) Build a multiple regression model predicting final math grade (G3) using as many features as you like but you must use at least four. Include at least one categorical variables and be sure to properly convert it to dummy codes. Select the features that you believe are useful -- you do not have to include all features.
+
+I used G1, G2, studytime, activities, absences, and health. I felt that students that did the most outside of school would demonstrate better time management skills, and I figured that previous test scores and study time all would have a strong factor with the final grades in addition to absences and health.
+```{r}
+# Convert activities from yes/no to 1/0 respectively
+math$activities[math$activities == 'yes'] <- 1
+math$activities[math$activities == 'no'] <- 0
+
+# Convert activities to factor to show that variable is categorical
+math$activities <- factor(math$activities)
+
+# Create model
+multi_model <- lm(G3 ~ G1 + G2 + studytime + activities + absences + health, data = math)
+multi_model
+```
+
+3. (20 pts) Using the model from (2), use stepwise backward elimination to remove all non-significant variables and then state the final model as an equation. State the backward elimination measure you applied (*p*-value, AIC, Adjusted R2). This [tutorial shows how to use various feature elimination techniques](https://www.youtube.com/watch?v=TzhgPXrFSm8&t=434s).
+```{r}
+library(MASS)
+step_model <- stepAIC(multi_model, direction = "both", 
+                      trace = FALSE)
+summary(step_model)
+```
+
+4. (10 pts) Calculate the 95% confidence interval for a prediction -- you may choose any data you wish for some new student.
+```{r}
+# For G3 scores
+t.test(math$G3)
+```
+5. (10 pts) What is the RMSE for this model -- use the entire data set for both training and validation. You may find the [*residuals()* function](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/residuals.html) useful. Alternatively, you can inspect the model object, e.g., if your model is in the variable *m*, then the residuals (errors) are in m\$residuals and your predicted values (fitted values) are in *m\$fitted.values*.
+```{r}
+# Use regression and compare to actual data
+predictions <- multi_model %>% predict(math)
+
+# RMSE
+library(caret)
+RMSE(predictions, math$G3)
+```
+## Problem 2 (40 Points)
+For this problem, the following [short tutorial might be helpful in interpreting the logistic regression output](https://www.youtube.com/watch?v=xl5dZo_BSJk).
+
+1. (5 pts) Using the same data set as in Problem (1), add another column, PF -- pass-fail. Mark any student whose final grade is less than 10 as F, otherwise as P and then build a dummy code variable for that new column. Use the new dummy variable column as the response variable.
+```{r warning=FALSE}
+math$PF[math$G3 < 10] <- 'F'
+math$PF[math$G3 >= 10] <- 'P'
+```
+
+2. (10 pts) Build a binomial logistic regression model classifying a student as passing or failing. Eliminate any non-significant variable using an elimination approach of your choice. Use as many features as you like but you must use at least four -- choose the ones you believe are most useful.
+```{r}
+# Convert new column to factor
+math$PF[math$PF == 'F'] <- 0
+math$PF[math$PF == 'P'] <- 1
+math$PF <- as.factor(math$PF)
+
+# Regression model
+mylogit <- glm(PF ~ G3 + G2 + G1 + studytime + absences + health, data = math, family = "binomial")
+```
+
+3. (5 pts) State the regression equation.
+```{r}
+mylogit
+summary(mylogit)
+```
+
+4. (20 pts) What is the accuracy of your model? Use the entire data set for both training and validation.
+```{r}
+# Test accuracy vs model
+accuracy <- mylogit %>% predict(math)
+
+# RMSE
+RMSE(accuracy, as.integer(math$PF))
+
+# R-squared
+R2(accuracy, as.integer(math$PF))
+  
+```
+I wanted to use a confusion matrix, but I couldn't get that to work due to issues with levels/references. I used a table, but that was too much to print, and I also used a CrossTable, but again there was too much information to print out. The accuracy was around 50%, which wasn't too great. The RMSE and $R^2$ values indicate this as well.
+
+## Problem 3 (10 Points)
+1. (8 pts) Implement the example from the textbook on pages 205 to 217 for the [data set on white wines](https://da5030.weebly.com/uploads/8/6/5/9/8659576/whitewines.csv).
+
+### Step 1 - collecting data
+http://archive.ics.uci.edu/ml
+
+### Step 2 - exploring and preparing the data
+```{r wine, wine_train, wine_test}
+# Load dataset
+wine <- read.csv("whitewines.csv")
+
+# Histogram
+hist(wine$quality)
+
+# Divide into training/test datasets
+wine_train <- wine[1:3750, ]
+wine_test <- wine[3751:4898, ]
+```
+
+### Step 3 - training a model on the data
+```{r}
+library(rpart)
+m.rpart <- rpart(quality ~ ., data = wine_train)
+m.rpart
+```
+
+Visualizing decision trees
+```{r}
+library(rpart.plot)
+rpart.plot(m.rpart, digits = 3)
+
+# change parameters
+rpart.plot(m.rpart, digits = 4, fallen.leaves = TRUE,
+             type = 3, extra = 101)
+```
+### Step 4 - evaluating model performance
+```{r}
+p.rpart <- predict(m.rpart, wine_test)
+summary(p.rpart)
+summary(wine_test$quality)
+cor(p.rpart, wine_test$quality)
+
+```
+Measuring performance with the mean absolute error
+$$MAE = \frac{1}{n}\sum_{i=1}^{n} e_i$$
+```{r}
+MAE <- function(actual, predicted) {
+    mean(abs(actual - predicted))
+}
+MAE(p.rpart, wine_test$quality)
+mean(wine_train$quality)
+MAE(5.87, wine_test$quality)
+```
+
+### Step 5 - improving model performance
+```{r}
+library(RWeka)
+m.m5p <- M5P(quality ~ ., data = wine_train)
+summary(m.m5p)
+
+p.m5p <- predict(m.m5p, wine_test)
+summary(p.m5p)
+cor(p.m5p, wine_test$quality)
+MAE(wine_test$quality, p.m5p)
+```
+
+2. (2 pts) Calculate the RMSE for the model.
+```{r}
+# get RMSE from summary of m.m5p
+names(summary(m.m5p))
+summary(m.m5p)$details
+summary(m.m5p)$details[[3]]
+```
