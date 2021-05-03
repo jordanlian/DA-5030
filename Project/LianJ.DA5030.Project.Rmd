@@ -1,0 +1,365 @@
+---
+title: "DA 5030 Final Project"
+author: "Jordan Lian"
+date: "4/26/2021"
+output:
+  pdf_document: default
+  html_document: default
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff = 75), tidy=TRUE)
+```
+
+
+```{r libraries}
+library(tidyverse)
+```
+
+https://www.datascience-pm.com/crisp-dm-2/ -- An overall CRISPR-DM process that I used as a reference/guide for this project.
+
+1. Business understanding - What does the business need?
+
+The business needs a model(S) that can predict obesity levels based off of certain factors. To achieve this objective, we will require the appropriate data, and some predictive modeling.
+
+2. Data understanding - What data do we have / need? Is it clean?
+
+The data is from the following URL: https://archive.ics.uci.edu/ml/datasets/Estimation+of+obesity+levels+based+on+eating+habits+and+physical+condition+ 
+
+The citation is below:
+
+Palechor, F. M., & de la Hoz Manotas, A. (2019). Dataset for estimation of obesity levels based on eating habits and physical condition in individuals from Colombia, Peru and Mexico. Data in Brief, 104344.
+
+The following URL provides a thorough data description: https://www.sciencedirect.com/science/article/pii/S2352340919306985?via%3Dihub
+
+## Load Data
+```{r load data}
+origin <- read_csv('ObesityDataSet_raw_and_data_sinthetic.csv')
+obesity <- origin
+```
+
+## Explore Data
+It is clear that weight and height have the strongest correlation, although the other numerical values do not share any correlation as strong as the one that exists between weight and height. Perhaps it is time that we include the categorical variables in our analysis.
+
+#### Correlation Plots
+```{r Exploration}
+# Count Obesity Types 
+table(obesity$NObeyesdad)
+
+# Age vs Height vs Weight
+library(GGally)
+ggpairs(obesity[2:4])
+
+# Weight vs other factors
+ggpairs(obesity[c(4, 7)])
+ggpairs(obesity[c(4, 8)])
+ggpairs(obesity[c(4, 11)])
+ggpairs(obesity[c(4, 13)])
+ggpairs(obesity[c(4, 14)])
+```
+
+#### Outliers
+```{r Outliers}
+# Outliers for Continuous variables
+hist(obesity$Age)
+hist(obesity$Height)
+hist(obesity$Weight)
+hist(obesity$FCVC)
+hist(obesity$NCP)
+hist(obesity$CH2O)
+hist(obesity$FAF)
+hist(obesity$TUE)
+```
+
+3. Data preparation - How do we organize the data for modeling?
+
+Depending on the model, I have to convert some of the categorical variables to numerical. Using the original dataset, I duplicated three extra copies for each predictive model.
+
+## Duplicate Datasets
+```{r Duplicate Datasets}
+NB <- obesity
+kNN <- obesity
+Reg <- obesity
+```
+
+## Naive Bayes Categorical Bins
+To create bins of equal interval size, I used the cut() function, and called for 3 breaks with a label vector with names. That way, I didn't need to mathematically calculate the intervals themselves.
+```{r NB Convert}
+  # Age
+summary(NB$Age)
+NB$Age <- cut(NB$Age, breaks = 3, labels = c("Young", "Middle-Aged", "Old"))
+
+# Height
+summary(NB$Height)
+NB$Height <- cut(NB$Height, breaks = 3, labels = c("Short", "Normal", "Tall"))
+
+# Weight
+summary(NB$Weight)
+NB$Weight <- cut(NB$Weight, breaks = 3, labels = c("Underweight", "Normal", "Overweight"))
+
+# FCVC
+summary(NB$FCVC)
+NB$FCVC <- cut(NB$FCVC, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# NCP
+summary(NB$NCP)
+NB$NCP <- cut(NB$NCP, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# CH2O
+summary(NB$CH2O)
+NB$CH2O <- cut(NB$CH2O, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# FAF
+summary(NB$FAF)
+NB$FAF <- cut(NB$FAF, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# TUE
+summary(NB$TUE)
+NB$TUE <- cut(NB$TUE, breaks = 3, labels = c("Low", "Normal", "Excessive"))
+```
+
+## k Nearest Neighbors (kNN) Normalization
+For kNN, we must normalize the numerical data.
+```{r kNN Normalize}
+# Normalization Function
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+
+# Get normalized data
+norm_df <- as.data.frame(lapply(kNN[c(2:4, 7:8, 11, 13:14)], normalize))
+
+# Remove Initial Columns
+kNN <- subset(kNN, select = -c(2:4, 7:8, 11, 13:14))
+
+# Replace with normalized data
+kNN <- cbind(kNN, norm_df)
+
+# Remove norm_df for memory's sake
+remove(norm_df)
+```
+
+## kNN Categorical to Numerical
+For some of the categorical variables, we can simply convert from no/yes to 0/1.
+```{r Categorical to Numerical}
+# Gender
+unique(kNN$Gender)
+kNN$Gender <- ifelse(kNN$Gender == "Male", 1, 0)
+
+# Family History - Overweight
+unique(kNN$family_history_with_overweight)
+kNN$family_history_with_overweight <- ifelse(kNN$family_history_with_overweight == "yes", 1, 0)
+
+# FAVC (Do you frequently consume high caloric food)
+unique(kNN$FAVC)
+kNN$FAVC <- ifelse(kNN$FAVC == "yes", 1, 0)
+
+# SMOKE (Do you smoke?)
+unique(kNN$SMOKE)
+kNN$SMOKE <- ifelse(kNN$SMOKE == "yes", 1, 0)
+
+# SCC (Do you monitor your calorie consumption?)
+unique(kNN$SCC)
+kNN$SCC <- ifelse(kNN$SCC == "yes", 1, 0)
+```
+
+## kNN One-Hot Encoding
+For categorical variables with more than 2 categories, we can one-hot encode them by creating new columns for each column value, and using 0/1.
+```{r kNN One-Hot Encoding}
+# Create dummy code
+library(caret)
+dmy <- dummyVars(" ~ .", data = kNN)
+
+# Create new data frame based off the dummy code
+oneHot <- data.frame(predict(dmy, newdata = kNN))
+
+# Remove the one-hot encoding for the obesity type (predicted variable)
+oneHot <- subset(oneHot, select = -c(19:26))
+
+# Add the original obesity type column, and rename
+kNN <- cbind(oneHot, kNN$NObeyesdad)
+names(kNN)[26] <- "NObeyesdad"
+
+# Remove oneHot and dmy from memory
+remove(dmy, oneHot)
+```
+
+## Regression
+```{r Reg Convert}
+# Use kNN dataset for regression
+Reg <- kNN
+
+# Convert obesity types to numeric values
+unique(Reg$NObeyesdad)
+Reg$NObeyesdad <- factor(Reg$NObeyesdad)
+Reg$NObeyesdad <- as.numeric(Reg$NObeyesdad)
+unique(Reg$NObeyesdad)
+```
+
+4. Modeling - What modeling techniques should we apply?
+
+The three models I used were Naive Bayes, kNN, and Regression. I then created an ensemble of the three models that I will describe in further detail later on.
+
+## Naive Bayes
+```{r Naive Bayes Model}
+# Random seed
+set.seed(1234)
+
+# Training/Validation
+sample <- sample.int(n = nrow(NB), size = floor(0.75*nrow(NB)), replace = F)
+NB_training <- NB[sample, ]
+NB_validation <- NB[-sample, ]
+
+# Naive Bayes Model and Prediction
+library(e1071)
+NB_model <- naiveBayes(as.factor(NObeyesdad) ~ ., data = NB_training)
+NB_pred <- predict(NB_model, NB_validation)
+
+# Results
+table(Prediction = NB_pred, Actual = NB_validation$NObeyesdad)
+```
+
+## kNN
+I used k=10 as the standard. This yielded a very successful model that I elaborated on later in the report.
+```{r kNN Model}
+# Training/Validation Data
+kNN_train <- kNN[sample, ]
+kNN_validation <- kNN[-sample, ]
+
+# Test/Validation Labels
+kNN_train_labels <- kNN_train[, 26]
+kNN_validation_labels <- kNN_validation[, 26]
+
+# Remove Labels from datasets
+kNN_train <- subset(kNN_train, select = -26)
+kNN_validation <- subset(kNN_validation, select = -26)
+
+# Model
+library(class)
+kNN_test_pred <- knn(train = kNN_train, test = kNN_validation, cl = kNN_train_labels, k=10)
+kNN_test_pred <- as.vector(kNN_test_pred)
+
+# Results
+table(Prediction = kNN_test_pred, Actual = kNN_validation_labels)
+```
+
+## Regression
+Since I included all factors in the Naive Bayes and kNN models, I figured it would only be appropriate to include all variables in the regression model. 
+```{r Regression Model}
+# Training/Validation Data
+reg_train <- Reg[sample, ]
+reg_validation <- Reg[-sample, ]
+
+reg_model <-glm(NObeyesdad~., data = reg_train)
+reg_pred <- predict(reg_model, reg_validation, type = 'response')
+
+# Round values
+table(Prediction = round(reg_pred), Actual = reg_validation$NObeyesdad) 
+```
+## Ensemble
+Rather than just looking at an individual case, this ensemble looks at the validation dataset, and gets all the predictions where the most popular prediction is the final prediction per case. The models are already created, so I felt it was redundant to run another model. If you have an individual case, you can add it to the validation dataset, where you can then run it against all 3 models (Naive Bayes, kNN, and Regression).
+```{r Ensemble}
+ensemble <- function(obesity) {
+  obesity_ensemble <- obesity
+  obesity_ensemble$NB <- as.vector(NB_pred)
+  obesity_ensemble$kNN <- kNN_test_pred
+  obesity_ensemble$Reg <- round(reg_pred)
+  
+  # Substitute Numeric Values for Regression
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 1] <- "Insufficient_Weight"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 2] <- "Normal_Weight"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 3] <- "Obesity_Type_I"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 4] <- "Obesity_Type_II"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 5] <- "Obesity_Type_III"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 6] <- "Overweight_Level_I"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 7] <- "Overweight_Level_II"
+  
+  for(i in 1:length(obesity_ensemble$NB)){
+    pred_vec <- rep(NA, 3)
+    pred_vec[1] <- obesity_ensemble$NB[i]
+    pred_vec[2] <- obesity_ensemble$kNN[i]
+    pred_vec[3] <- obesity_ensemble$Reg[i]
+    
+    if (pred_vec[1] == pred_vec[2] | pred_vec[2] == pred_vec[3]) {
+      obesity_ensemble$best_pred[i] <- pred_vec[2]
+    }
+    else if (pred_vec[1] == pred_vec[3] | pred_vec[2] == pred_vec[3]) {
+      obesity_ensemble$best_pred[i] <- pred_vec[3]
+    } 
+    else {
+      # Get Numerical Values, and get the medium value
+      replace(pred_vec, pred_vec == "Insufficient_Weight", 1)
+      replace(pred_vec, pred_vec == "Normal_Weight", 2)
+      replace(pred_vec, pred_vec == "Obesity_Type_I", 3)
+      replace(pred_vec, pred_vec == "Obesity_Type_II", 4)
+      replace(pred_vec, pred_vec == "Obesity_Type_III", 5)
+      replace(pred_vec, pred_vec == "Overweight_Level_I", 6)
+      replace(pred_vec, pred_vec == "Overweight_Level_II", 7)
+      
+      new_val <- median(pred_vec)
+      
+      # Replace back the numerical value with the actual prediction
+      replace(new_val, new_val == 1, "Insufficient_Weight")
+      replace(new_val, new_val == 2, "Normal_Weight")
+      replace(new_val, new_val == 3, "Obesity_Type_I")
+      replace(new_val, new_val == 4, "Obesity_Type_II")
+      replace(new_val, new_val == 5, "Obesity_Type_III")
+      replace(new_val, new_val == 6, "Overweight_Level_I")
+      replace(new_val, new_val == 7, "Overweight_Level_II")  
+      
+      obesity_ensemble$best_pred[i] <- new_val
+    }
+    
+  # Overall Prediction
+  outcome <- confusionMatrix(as.factor(obesity_ensemble$best_pred), as.factor(obesity_ensemble$NObeyesdad))
+  return(outcome)
+  }
+}
+```
+
+```{r Call Ensemble, warning=FALSE}
+ensemble(NB_validation)
+```
+I have a feeling this ensemble did not have a good accuracy/recall/specificity because it put the regression model into consideration. This should not have been the case because the regression model was not reliable (low accuracy, precision, etc). That is something I learned from creating this ensemble. For the future, Naive Bayes and kNN look like safer bets for non-binary classification problems.
+
+5. Evaluation - Which model best meets the business objectives?
+
+For classification problems, we can look at accuracy, precision, recall/sensitivity, and specificity. Here is an overview of each metric. Accuracy, recall/sensitivity, and specificity are already in the confusion matrix results. Due to this problem not being binary, I felt that it would have been repetitive and redundant to include precision since it the confusion matrix does not include that statistic.
+
+1. Accuracy is number of correct predictions made over the total number of predictions made.
+2. Precision looks at all of the true positives predictions compared to all of the positive predictions
+3. Recall/Sensitivity looks at all of the true positive predictions compared to all of the actual positive results.
+4. Specificity looks at all of the true negative predictions compared to all of the actual negative results.
+
+## Naive Bayes Results
+The accuracy was mediocre, but not terrible. Apart from the accuracy, the sensitivity and specificity was decent for certain classes, while it was poor for other classes. For normal weight and overweight level 2, the sensitivity was very poor, suggesting that there was too many predictions for those categories, even when the actual category was not the mentioned category.
+```{r Naive Bayes Results}
+# Confusion Matrix
+confusionMatrix(as.factor(NB_pred), as.factor(NB_validation$NObeyesdad))
+```
+
+## kNN Results
+This model has very good accuracy, sensitivity, and specificity values across each obesity level/type. An overall accuracy of 73% is solid, and the balanced accuracies are even better (apart from the normal weight). Based off of my instinct, this seems like the best model. However, I have to still run the regression and ensemble model.
+```{r kNN Results}
+# Cross Table
+library(gmodels)
+CrossTable(x = kNN_test_pred, y = kNN_validation_labels, prop.chisq=FALSE, prop.c = FALSE, prop.r = FALSE, prop.t = FALSE)
+
+# Confusion Matrix
+confusionMatrix(as.factor(kNN_test_pred), as.factor(kNN_validation_labels))
+```
+
+I inserted an image of one of the CrossTables while coding because I could not get the CrossTable to fit on the page. I just stuck with the confusion matrices in the future for visual's sake since the confusion matrix gave us the same information.
+
+![Cross Table](images/CrossTable.png)
+
+## Regression Results 
+This regression model was subpar. I believe that it did not go as planned because the regrsssion problem was not binary, and this is reflected in the accuracy and the sensitivity values (apart from the Obesity Type III [class:5])
+```{r Regression Results, warning=FALSE}
+# Confusion Matrix
+confusionMatrix(as.factor(round(reg_pred)), as.factor(reg_validation$NObeyesdad))
+```
+
+6. Deployment - How do stakeholders access the results?
+
+Stakeholders merely want the results of the models, and a recommendation as to which model to use. From my analysis, it is clear that the kNN model is the most accurate predictive model for this particular dataset. It has the highest accuracy value, the highest sensitivity values, and the highest specificity values across the board. This makes kNN the obvious choice. This doesn't surprise me because kNN shows little to no bias in it's models, which is helpful for classification models with a lot of variables/outcomes (non-binary classification with 17 variables).

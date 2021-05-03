@@ -1,0 +1,565 @@
+DA 5030 Final Project
+========================================================
+author: Jordan Lian
+date: April 28, 2021
+autosize: true
+
+Overview
+========================================================
+Structure of this Video/Presentation
+
+- Overview of the data and where you obtained it
+- Business problems, i.e., what I am trying to predict
+- How I explored the data
+- Data Transformations
+- What models I built and why
+- How the models performed
+- How I evaluated, validated the models
+- How I built an ensemble model and how well the ensemble performed
+- Summary and key lessons learned
+
+Overview of the Data and Business Problem
+========================================================
+- Obesity Data
+- Can we predict the obesity levels of individuals in Colombia, Peru, or Mexico?
+- Mainly considers eating habits and physical condition
+- Obtained from University of California Irvine (UCI) Machine Learning Repository (citation in report)
+
+### Data Set
+```{r Load Data}
+library(tidyverse)
+origin <- read_csv('ObesityDataSet_raw_and_data_sinthetic.csv')
+obesity <- origin
+head(obesity)
+```
+
+Data Exploration, Part 1
+========================================================
+
+```{r Data Exploration}
+# Count Obesity Types 
+table(obesity$NObeyesdad)
+
+# Age vs Height vs Weight
+library(GGally)
+ggpairs(obesity[2:4])
+
+# Weight vs other factors
+ggpairs(obesity[c(4, 7)])
+```
+
+Data Exploration, Part 2
+========================================================
+
+```{r}
+# Outliers for Continuous variables
+hist(obesity$Age)
+hist(obesity$Height)
+hist(obesity$Weight)
+```
+
+Data Transformations, Part 1
+========================================================
+
+### Age Bins
+```{r Age Bins, eval=FALSE}
+  # Age
+summary(NB$Age)
+NB$Age <- cut(NB$Age, breaks = 3, labels = c("Young", "Middle-Aged", "Old"))
+```
+
+### Normalization
+```{r Normalization, eval=FALSE}
+# Normalization Function
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+
+# Get normalized data
+norm_df <- as.data.frame(lapply(kNN[c(2:4, 7:8, 11, 13:14)], normalize))
+
+# Remove Initial Columns
+kNN <- subset(kNN, select = -c(2:4, 7:8, 11, 13:14))
+
+# Replace with normalized data
+kNN <- cbind(kNN, norm_df)
+
+# Remove norm_df for memory's sake
+remove(norm_df)
+```
+
+### Binary Code
+```{r Binary Code, eval=FALSE}
+# Gender
+unique(kNN$Gender)
+kNN$Gender <- ifelse(kNN$Gender == "Male", 1, 0)
+
+# Family History - Overweight
+unique(kNN$family_history_with_overweight)
+kNN$family_history_with_overweight <- ifelse(kNN$family_history_with_overweight == "yes", 1, 0)
+
+# FAVC (Do you frequently consume high caloric food)
+unique(kNN$FAVC)
+kNN$FAVC <- ifelse(kNN$FAVC == "yes", 1, 0)
+
+# SMOKE (Do you smoke?)
+unique(kNN$SMOKE)
+kNN$SMOKE <- ifelse(kNN$SMOKE == "yes", 1, 0)
+
+# SCC (Do you monitor your calorie consumption?)
+unique(kNN$SCC)
+kNN$SCC <- ifelse(kNN$SCC == "yes", 1, 0)
+```
+
+Data Transformations, Part 2
+========================================================
+
+### One Hot Encoding
+```{r kNN One-Hot Encoding, eval=FALSE}
+# Create dummy code
+library(caret)
+dmy <- dummyVars(" ~ .", data = kNN)
+
+# Create new data frame based off the dummy code
+oneHot <- data.frame(predict(dmy, newdata = kNN))
+
+# Remove the one-hot encoding for the obesity type (predicted variable)
+oneHot <- subset(oneHot, select = -c(19:26))
+
+# Add the original obesity type column, and rename
+kNN <- cbind(oneHot, kNN$NObeyesdad)
+names(kNN)[26] <- "NObeyesdad"
+
+# Remove oneHot and dmy from memory
+remove(dmy, oneHot)
+```
+
+### Convert obesity types to numeric values
+```{r convert, eval=FALSE}
+unique(Reg$NObeyesdad)
+Reg$NObeyesdad <- factor(Reg$NObeyesdad)
+Reg$NObeyesdad <- as.numeric(Reg$NObeyesdad)
+unique(Reg$NObeyesdad)
+```
+
+What models I built and why
+========================================================
+- Naive Bayes
+- k-nearest-neighbors (kNN)
+- Regression
+
+Naive Bayes and kNN, are good for categorical classification problems. They both show little to no bias in their models due to their simplicity. Categorical regression is normally used for binary problems, but I wanted to see how a regression model would run with a non-binary problem.
+
+Naive Bayes Results
+========================================================
+
+```{r Duplicate Datasets, include=FALSE}
+NB <- obesity
+kNN <- obesity
+Reg <- obesity
+```
+
+```{r NB Convert, include=FALSE}
+  # Age
+summary(NB$Age)
+NB$Age <- cut(NB$Age, breaks = 3, labels = c("Young", "Middle-Aged", "Old"))
+
+# Height
+summary(NB$Height)
+NB$Height <- cut(NB$Height, breaks = 3, labels = c("Short", "Normal", "Tall"))
+
+# Weight
+summary(NB$Weight)
+NB$Weight <- cut(NB$Weight, breaks = 3, labels = c("Underweight", "Normal", "Overweight"))
+
+# FCVC
+summary(NB$FCVC)
+NB$FCVC <- cut(NB$FCVC, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# NCP
+summary(NB$NCP)
+NB$NCP <- cut(NB$NCP, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# CH2O
+summary(NB$CH2O)
+NB$CH2O <- cut(NB$CH2O, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# FAF
+summary(NB$FAF)
+NB$FAF <- cut(NB$FAF, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# TUE
+summary(NB$TUE)
+NB$TUE <- cut(NB$TUE, breaks = 3, labels = c("Low", "Normal", "Excessive"))
+```
+
+```{r, include=FALSE}
+# Random seed
+set.seed(1234)
+
+# Training/Validation
+sample <- sample.int(n = nrow(NB), size = floor(0.75*nrow(NB)), replace = F)
+NB_training <- NB[sample, ]
+NB_validation <- NB[-sample, ]
+
+# Naive Bayes Model and Prediction
+library(e1071)
+NB_model <- naiveBayes(as.factor(NObeyesdad) ~ ., data = NB_training)
+NB_pred <- predict(NB_model, NB_validation)
+
+# Results
+table(Prediction = NB_pred, Actual = NB_validation$NObeyesdad)
+```
+
+```{r Naive Bayes Results}
+# Confusion Matrix
+library(caret)
+confusionMatrix(as.factor(NB_pred), as.factor(NB_validation$NObeyesdad))
+```
+
+kNN Results
+========================================================
+```{r, include=FALSE}
+# Normalization Function
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+
+# Get normalized data
+norm_df <- as.data.frame(lapply(kNN[c(2:4, 7:8, 11, 13:14)], normalize))
+
+# Remove Initial Columns
+kNN <- subset(kNN, select = -c(2:4, 7:8, 11, 13:14))
+
+# Replace with normalized data
+kNN <- cbind(kNN, norm_df)
+
+# Remove norm_df for memory's sake
+remove(norm_df)
+```
+
+```{r, include=FALSE}
+# Gender
+unique(kNN$Gender)
+kNN$Gender <- ifelse(kNN$Gender == "Male", 1, 0)
+
+# Family History - Overweight
+unique(kNN$family_history_with_overweight)
+kNN$family_history_with_overweight <- ifelse(kNN$family_history_with_overweight == "yes", 1, 0)
+
+# FAVC (Do you frequently consume high caloric food)
+unique(kNN$FAVC)
+kNN$FAVC <- ifelse(kNN$FAVC == "yes", 1, 0)
+
+# SMOKE (Do you smoke?)
+unique(kNN$SMOKE)
+kNN$SMOKE <- ifelse(kNN$SMOKE == "yes", 1, 0)
+
+# SCC (Do you monitor your calorie consumption?)
+unique(kNN$SCC)
+kNN$SCC <- ifelse(kNN$SCC == "yes", 1, 0)
+```
+
+```{r, include=FALSE}
+# Create dummy code
+library(caret)
+dmy <- dummyVars(" ~ .", data = kNN)
+
+# Create new data frame based off the dummy code
+oneHot <- data.frame(predict(dmy, newdata = kNN))
+
+# Remove the one-hot encoding for the obesity type (predicted variable)
+oneHot <- subset(oneHot, select = -c(19:26))
+
+# Add the original obesity type column, and rename
+kNN <- cbind(oneHot, kNN$NObeyesdad)
+names(kNN)[26] <- "NObeyesdad"
+
+# Remove oneHot and dmy from memory
+remove(dmy, oneHot)
+```
+
+```{r kNN Model, include=FALSE}
+# Training/Validation Data
+kNN_train <- kNN[sample, ]
+kNN_validation <- kNN[-sample, ]
+
+# Test/Validation Labels
+kNN_train_labels <- kNN_train[, 26]
+kNN_validation_labels <- kNN_validation[, 26]
+
+# Remove Labels from datasets
+kNN_train <- subset(kNN_train, select = -26)
+kNN_validation <- subset(kNN_validation, select = -26)
+
+# Model
+library(class)
+kNN_test_pred <- knn(train = kNN_train, test = kNN_validation, cl = kNN_train_labels, k=10)
+kNN_test_pred <- as.vector(kNN_test_pred)
+
+# Results
+table(Prediction = kNN_test_pred, Actual = kNN_validation_labels)
+```
+
+```{r}
+# Confusion Matrix
+confusionMatrix(as.factor(kNN_test_pred), as.factor(kNN_validation_labels))
+```
+
+Regression Results
+========================================================
+```{r, include=FALSE}
+# Use kNN dataset for regression
+Reg <- kNN
+
+# Convert obesity types to numeric values
+unique(Reg$NObeyesdad)
+Reg$NObeyesdad <- factor(Reg$NObeyesdad)
+Reg$NObeyesdad <- as.numeric(Reg$NObeyesdad)
+unique(Reg$NObeyesdad)
+```
+
+```{r, include=FALSE}
+# Training/Validation Data
+reg_train <- Reg[sample, ]
+reg_validation <- Reg[-sample, ]
+
+reg_model <-glm(NObeyesdad~., data = reg_train)
+reg_pred <- predict(reg_model, reg_validation, type = 'response')
+
+# Round values
+table(Prediction = round(reg_pred), Actual = reg_validation$NObeyesdad) 
+```
+
+```{r, warning=FALSE}
+# Confusion Matrix
+confusionMatrix(as.factor(round(reg_pred)), as.factor(reg_validation$NObeyesdad))
+```
+
+Ensemble Function
+========================================================
+
+I created the ensemble all within a function, that I would call later on. The function would take in a validation dataset, and then take the respective prediction vectors for the algorithm to produce a final prediction vector.
+```{r Ensemble}
+ensemble <- function(obesity) {
+  obesity_ensemble <- obesity
+  obesity_ensemble$NB <- as.vector(NB_pred)
+  obesity_ensemble$kNN <- kNN_test_pred
+  obesity_ensemble$Reg <- round(reg_pred)
+  
+  # Substitute Numeric Values for Regression
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 1] <- "Insufficient_Weight"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 2] <- "Normal_Weight"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 3] <- "Obesity_Type_I"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 4] <- "Obesity_Type_II"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 5] <- "Obesity_Type_III"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 6] <- "Overweight_Level_I"
+  obesity_ensemble$Reg[obesity_ensemble$Reg == 7] <- "Overweight_Level_II"
+  
+  for(i in 1:length(obesity_ensemble$NB)){
+    pred_vec <- rep(NA, 3)
+    pred_vec[1] <- obesity_ensemble$NB[i]
+    pred_vec[2] <- obesity_ensemble$kNN[i]
+    pred_vec[3] <- obesity_ensemble$Reg[i]
+    
+    if (pred_vec[1] == pred_vec[2] | pred_vec[2] == pred_vec[3]) {
+      obesity_ensemble$best_pred[i] <- pred_vec[2]
+    }
+    else if (pred_vec[1] == pred_vec[3] | pred_vec[2] == pred_vec[3]) {
+      obesity_ensemble$best_pred[i] <- pred_vec[3]
+    } 
+    else {
+      # Get Numerical Values, and get the medium value
+      replace(pred_vec, pred_vec == "Insufficient_Weight", 1)
+      replace(pred_vec, pred_vec == "Normal_Weight", 2)
+      replace(pred_vec, pred_vec == "Obesity_Type_I", 3)
+      replace(pred_vec, pred_vec == "Obesity_Type_II", 4)
+      replace(pred_vec, pred_vec == "Obesity_Type_III", 5)
+      replace(pred_vec, pred_vec == "Overweight_Level_I", 6)
+      replace(pred_vec, pred_vec == "Overweight_Level_II", 7)
+      
+      new_val <- median(pred_vec)
+      
+      # Replace back the numerical value with the actual prediction
+      replace(new_val, new_val == 1, "Insufficient_Weight")
+      replace(new_val, new_val == 2, "Normal_Weight")
+      replace(new_val, new_val == 3, "Obesity_Type_I")
+      replace(new_val, new_val == 4, "Obesity_Type_II")
+      replace(new_val, new_val == 5, "Obesity_Type_III")
+      replace(new_val, new_val == 6, "Overweight_Level_I")
+      replace(new_val, new_val == 7, "Overweight_Level_II")  
+      
+      obesity_ensemble$best_pred[i] <- new_val
+    }
+    
+  # Overall Prediction
+  outcome <- confusionMatrix(as.factor(obesity_ensemble$best_pred), as.factor(obesity_ensemble$NObeyesdad))
+  return(outcome)
+  }
+}
+```
+
+Ensemble Results
+========================================================
+```{r, include=FALSE}
+NB <- obesity
+kNN <- obesity
+Reg <- obesity
+```
+
+```{r, include=FALSE}
+  # Age
+summary(NB$Age)
+NB$Age <- cut(NB$Age, breaks = 3, labels = c("Young", "Middle-Aged", "Old"))
+
+# Height
+summary(NB$Height)
+NB$Height <- cut(NB$Height, breaks = 3, labels = c("Short", "Normal", "Tall"))
+
+# Weight
+summary(NB$Weight)
+NB$Weight <- cut(NB$Weight, breaks = 3, labels = c("Underweight", "Normal", "Overweight"))
+
+# FCVC
+summary(NB$FCVC)
+NB$FCVC <- cut(NB$FCVC, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# NCP
+summary(NB$NCP)
+NB$NCP <- cut(NB$NCP, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# CH2O
+summary(NB$CH2O)
+NB$CH2O <- cut(NB$CH2O, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# FAF
+summary(NB$FAF)
+NB$FAF <- cut(NB$FAF, breaks = 3, labels = c("Low", "Medium", "High"))
+
+# TUE
+summary(NB$TUE)
+NB$TUE <- cut(NB$TUE, breaks = 3, labels = c("Low", "Normal", "Excessive"))
+```
+
+```{r, include=FALSE}
+# Normalization Function
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x))) }
+
+# Get normalized data
+norm_df <- as.data.frame(lapply(kNN[c(2:4, 7:8, 11, 13:14)], normalize))
+
+# Remove Initial Columns
+kNN <- subset(kNN, select = -c(2:4, 7:8, 11, 13:14))
+
+# Replace with normalized data
+kNN <- cbind(kNN, norm_df)
+
+# Remove norm_df for memory's sake
+remove(norm_df)
+```
+
+```{r, include=FALSE}
+# Gender
+unique(kNN$Gender)
+kNN$Gender <- ifelse(kNN$Gender == "Male", 1, 0)
+
+# Family History - Overweight
+unique(kNN$family_history_with_overweight)
+kNN$family_history_with_overweight <- ifelse(kNN$family_history_with_overweight == "yes", 1, 0)
+
+# FAVC (Do you frequently consume high caloric food)
+unique(kNN$FAVC)
+kNN$FAVC <- ifelse(kNN$FAVC == "yes", 1, 0)
+
+# SMOKE (Do you smoke?)
+unique(kNN$SMOKE)
+kNN$SMOKE <- ifelse(kNN$SMOKE == "yes", 1, 0)
+
+# SCC (Do you monitor your calorie consumption?)
+unique(kNN$SCC)
+kNN$SCC <- ifelse(kNN$SCC == "yes", 1, 0)
+```
+
+```{r, include=FALSE}
+# Create dummy code
+library(caret)
+dmy <- dummyVars(" ~ .", data = kNN)
+
+# Create new data frame based off the dummy code
+oneHot <- data.frame(predict(dmy, newdata = kNN))
+
+# Remove the one-hot encoding for the obesity type (predicted variable)
+oneHot <- subset(oneHot, select = -c(19:26))
+
+# Add the original obesity type column, and rename
+kNN <- cbind(oneHot, kNN$NObeyesdad)
+names(kNN)[26] <- "NObeyesdad"
+
+# Remove oneHot and dmy from memory
+remove(dmy, oneHot)
+```
+
+```{r, include=FALSE}
+# Use kNN dataset for regression
+Reg <- kNN
+
+# Convert obesity types to numeric values
+unique(Reg$NObeyesdad)
+Reg$NObeyesdad <- factor(Reg$NObeyesdad)
+Reg$NObeyesdad <- as.numeric(Reg$NObeyesdad)
+unique(Reg$NObeyesdad)
+```
+
+```{r, include=FALSE}
+# Random seed
+set.seed(1234)
+
+# Training/Validation
+sample <- sample.int(n = nrow(NB), size = floor(0.75*nrow(NB)), replace = F)
+NB_training <- NB[sample, ]
+NB_validation <- NB[-sample, ]
+
+# Naive Bayes Model and Prediction
+library(e1071)
+NB_model <- naiveBayes(as.factor(NObeyesdad) ~ ., data = NB_training)
+NB_pred <- predict(NB_model, NB_validation)
+```
+
+```{r, include=FALSE}
+# Training/Validation Data
+kNN_train <- kNN[sample, ]
+kNN_validation <- kNN[-sample, ]
+
+# Test/Validation Labels
+kNN_train_labels <- kNN_train[, 26]
+kNN_validation_labels <- kNN_validation[, 26]
+
+# Remove Labels from datasets
+kNN_train <- subset(kNN_train, select = -26)
+kNN_validation <- subset(kNN_validation, select = -26)
+
+# Model
+library(class)
+kNN_test_pred <- knn(train = kNN_train, test = kNN_validation, cl = kNN_train_labels, k=10)
+kNN_test_pred <- as.vector(kNN_test_pred)
+```
+
+```{r, include=FALSE}
+# Training/Validation Data
+reg_train <- Reg[sample, ]
+reg_validation <- Reg[-sample, ]
+
+reg_model <-glm(NObeyesdad~., data = reg_train)
+reg_pred <- predict(reg_model, reg_validation, type = 'response')
+```
+
+### Call the function
+```{r Call Ensemble, warning=FALSE}
+ensemble(NB_validation)
+```
+
+Summary and key lessons learned
+========================================================
+- Regression was a poor choice, use decision tree or something else next time
+- Look to use bagging or boosting in the ensemble? The equal vote gave the regression model too much a say in determining the ultimate prediction
+- Incorporate cross-fold validation if possible? (Not enough time)
+- Maybe don't incorporate all variables in your analysis? Find the key components (PCA)
